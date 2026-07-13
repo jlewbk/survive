@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SURVIVE · 三人动物卡牌</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- ========== 首页 ========== -->
+    <div id="page-home" class="page active">
+      <div class="home-top">
+        <button class="btn-rules-icon" id="btn-rules-home" title="游戏规则">📜</button>
+      </div>
+      <div class="title-section">
+        <div class="title-emblems">🐯🏹🐺🐑🐕🐱🐔</div>
+        <h1 class="game-title">SURVIVE</h1>
+        <div class="title-divider"></div>
+        <p class="subtitle">三人动物卡牌 · 最后一战</p>
+      </div>
+      <div class="home-buttons">
+        <button id="btn-create" class="btn btn-primary">🏠 创建房间</button>
+        <button id="btn-join" class="btn btn-secondary">🔗 加入房间</button>
+      </div>
+      <p class="home-footer">三人实时对战 · 博物志风格卡牌</p>
+    </div>
+
+    <!-- ========== 创建房间页 ========== -->
+    <div id="page-create" class="page">
+      <h2>🏠 创建房间</h2>
+      <div class="form-group">
+        <label for="input-nickname-create">输入昵称</label>
+        <input type="text" id="input-nickname-create" placeholder="请输入你的昵称" maxlength="8">
+      </div>
+      <div class="form-actions">
+        <button id="btn-create-confirm" class="btn btn-primary">确认创建</button>
+        <button id="btn-back-home" class="btn btn-text">返回</button>
+      </div>
+    </div>
+
+    <!-- ========== 加入房间页 ========== -->
+    <div id="page-join" class="page">
+      <h2>🔗 加入房间</h2>
+      <div class="form-group">
+        <label for="input-room-code">房间码</label>
+        <input type="text" id="input-room-code" placeholder="输入6位房间码" maxlength="6" class="input-code">
+      </div>
+      <div class="form-group">
+        <label for="input-nickname-join">输入昵称</label>
+        <input type="text" id="input-nickname-join" placeholder="请输入你的昵称" maxlength="8">
+      </div>
+      <div class="form-actions">
+        <button id="btn-join-confirm" class="btn btn-primary">确认加入</button>
+        <button id="btn-back-home2" class="btn btn-text">返回</button>
+      </div>
+    </div>
+
+    <!-- ========== 等待房间页 ========== -->
+    <div id="page-lobby" class="page">
+      <h2>🕐 等待中</h2>
+      <div class="room-info-box">
+        <p class="room-label">房间码</p>
+        <strong id="display-room-code">------</strong>
+        <p class="room-hint">请将此房间码分享给其他玩家</p>
+      </div>
+      <div class="player-list-box">
+        <h3>玩家列表 (<span id="player-count">0</span>/3)</h3>
+        <ul id="player-list-ul">
+          <!-- 动态渲染 -->
+        </ul>
+      </div>
+      <div id="room-status" class="status-message-box"></div>
+    </div>
+
+    <!-- ========== 游戏页面 ========== -->
+    <div id="page-game" class="page">
+      <div class="game-header">
+        <div class="header-left">
+          <div class="round-info">第 <span id="round-number">1</span> 回合</div>
+        </div>
+        <div class="timer" id="timer-display">30</div>
+        <button class="rules-btn" id="btn-rules" title="游戏规则">📜</button>
+      </div>
+
+      <div class="battlefield">
+        <div class="opponents-row" id="opponents-bar">
+          <!-- 动态渲染 -->
+        </div>
+      </div>
+
+      <div class="hand-area">
+        <div class="hand-header">
+          <h3>你的手牌</h3>
+          <span class="hand-count" id="hand-count">9</span>
+        </div>
+        <div class="hand-cards" id="hand-cards">
+          <!-- 动态渲染 -->
+        </div>
+      </div>
+
+      <div class="action-area">
+        <button id="btn-play-card" class="btn btn-primary" disabled>
+          选择一张卡牌出牌
+        </button>
+      </div>
+
+      <div class="battle-result" id="battle-result" style="display:none">
+        <h3>⚔️ 战斗结果</h3>
+        <div class="battle-events" id="battle-events"></div>
+        <div class="battle-footer">
+          <span>2秒后继续下一回合...</span>
+        </div>
+      </div>
+
+      <div class="waiting-overlay hidden" id="waiting-overlay">
+        <div class="waiting-spinner"></div>
+        <p>等待其他玩家出牌...</p>
+        <p class="waiting-count" id="waiting-count">已出牌: 0/3</p>
+      </div>
+    </div>
+
+    <!-- ========== 规则弹窗 ========== -->
+    <div class="modal-overlay" id="rules-modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>📜 游戏规则</h2>
+          <button class="modal-close" id="modal-close">✕</button>
+        </div>
+
+        <div class="modal-section-title">🐾 克制链</div>
+        <div class="chain-diagram">
+          <div class="chain-item"><span class="chain-emoji">🐯</span><span class="chain-name">虎</span></div>
+          <div class="chain-arrow">⬇ 克制</div>
+          <div class="chain-item"><span class="chain-emoji">🏹</span><span class="chain-name">猎人</span></div>
+          <div class="chain-arrow">⬇ 克制</div>
+          <div class="chain-item"><span class="chain-emoji">🐺</span><span class="chain-name">狼</span></div>
+          <div class="chain-arrow">⬇ 克制</div>
+          <div class="chain-item"><span class="chain-emoji">🐑</span><span class="chain-name">羊</span></div>
+          <div class="chain-arrow">⬇ 克制</div>
+          <div class="chain-item"><span class="chain-emoji">🐕</span><span class="chain-name">犬</span></div>
+          <div class="chain-arrow">⬇ 克制</div>
+          <div class="chain-item"><span class="chain-emoji">🐱</span><span class="chain-name">猫</span></div>
+          <div class="chain-arrow">⬇ 克制</div>
+          <div class="chain-item"><span class="chain-emoji">🐔</span><span class="chain-name">鸡</span></div>
+        </div>
+
+        <div class="modal-section-title">⚡ 特殊规则</div>
+        <div class="rules-list">
+          <div class="rule-item">
+            <span class="rule-icon">🤝</span>
+            <span class="rule-text"><strong>二打一</strong>：两张同等级卡牌合力可干掉高一级卡牌</span>
+          </div>
+          <div class="rule-item">
+            <span class="rule-icon">🏹</span>
+            <span class="rule-text"><strong>猎人互斥</strong>：两张猎人同时打出且无虎在场，三张牌各扣1血</span>
+          </div>
+          <div class="rule-item">
+            <span class="rule-icon">🐯</span>
+            <span class="rule-text"><strong>虎的专属</strong>：两张虎同时打出，三张牌全清；虎前6回合未打出则自然死亡</span>
+          </div>
+          <div class="rule-item">
+            <span class="rule-icon">🔄</span>
+            <span class="rule-text"><strong>狼灭绝</strong>：所有狼死亡后，羊与犬在克制链中互换位置</span>
+          </div>
+          <div class="rule-item">
+            <span class="rule-icon">💀</span>
+            <span class="rule-text"><strong>捕食自死</strong>：1血卡牌击杀低等级1血卡牌后，自身也死亡</span>
+          </div>
+          <div class="rule-item">
+            <span class="rule-icon">🏆</span>
+            <span class="rule-text"><strong>胜负</strong>：最后场上仍有存活卡牌的玩家获胜</span>
+          </div>
+        </div>
+
+        <button class="btn btn-primary" id="modal-confirm">我明白了</button>
+      </div>
+    </div>
+
+    <!-- ========== 游戏结束页面 ========== -->
+    <div id="page-game-over" class="page">
+      <div class="game-over-box">
+        <h1 id="winner-announcement">🏆 游戏结束</h1>
+        <div class="standings" id="standings"></div>
+        <button id="btn-back-to-home" class="btn btn-primary">返回首页</button>
+      </div>
+    </div>
+
+    <!-- ========== 错误提示 ========== -->
+    <div id="toast" class="toast hidden"></div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Todo 待办事项</title>
+<style>
+  :root {
+    --bg: #f0f2f5;
+    --card-bg: #ffffff;
+    --text: #1a1a2e;
+    --text-secondary: #6b7280;
+    --primary: #4f46e5;
+    --primary-hover: #4338ca;
+    --danger: #ef4444;
+    --danger-hover: #dc2626;
+    --border: #e5e7eb;
+    --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+    --shadow-lg: 0 10px 25px rgba(0,0,0,.1);
+    --radius: 12px;
+    --transition: 0.2s ease;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    padding: 40px 16px;
+  }
+
+  .app {
+    width: 100%;
+    max-width: 520px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  /* Header */
+  .header {
+    text-align: center;
+  }
+  .header h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: -0.5px;
+  }
+  .header p {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin-top: 4px;
+  }
+
+  /* Input area */
+  .input-group {
+    display: flex;
+    gap: 10px;
+    background: var(--card-bg);
+    padding: 8px;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-lg);
+  }
+  .input-group input {
+    flex: 1;
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 1rem;
+    outline: none;
+    transition: border var(--transition);
+  }
+  .input-group input:focus {
+    border-color: var(--primary);
+  }
+  .input-group button {
+    background: var(--primary);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 12px 20px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background var(--transition);
+    white-space: nowrap;
+  }
+  .input-group button:hover { background: var(--primary-hover); }
+
+  /* Stats & Filters */
+  .toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .stats {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+  }
+  .stats span {
+    font-weight: 600;
+    color: var(--primary);
+  }
+  .filters {
+    display: flex;
+    gap: 4px;
+    background: var(--card-bg);
+    padding: 4px;
+    border-radius: 8px;
+    box-shadow: var(--shadow);
+  }
+  .filters button {
+    border: none;
+    background: transparent;
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    color: var(--text-secondary);
+    font-weight: 500;
+    transition: all var(--transition);
+  }
+  .filters button.active {
+    background: var(--primary);
+    color: #fff;
+  }
+  .filters button:hover:not(.active) {
+    background: var(--bg);
+  }
+
+  /* List */
+  .todo-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .todo-item {
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-shadow: var(--shadow);
+    transition: all var(--transition);
+    animation: slideIn 0.25s ease;
+  }
+  .todo-item.completed .todo-text {
+    text-decoration: line-through;
+    color: #9ca3af;
+  }
+  .todo-item:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,.1);
+  }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(-8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .todo-check {
+    width: 22px;
+    height: 22px;
+    border: 2px solid #d1d5db;
+    border-radius: 50%;
+    cursor: pointer;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--transition);
+  }
+  .todo-check:hover { border-color: var(--primary); }
+  .todo-check.done {
+    background: var(--primary);
+    border-color: var(--primary);
+  }
+  .todo-check.done::after {
+    content: "✓";
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .todo-text {
+    flex: 1;
+    font-size: 0.95rem;
+    word-break: break-word;
+  }
+  .todo-item.completed .todo-text {
+    text-decoration: line-through;
+    color: #9ca3af;
+  }
+
+  /* Edit mode */
+  .todo-edit-input {
+    flex: 1;
+    border: 2px solid var(--primary);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 0.95rem;
+    outline: none;
+    font-family: inherit;
+  }
+
+  .todo-actions {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+  .todo-actions button {
+    border: none;
+    background: transparent;
+    padding: 6px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    transition: all var(--transition);
+  }
+  .todo-actions button:hover {
+    background: var(--bg);
+  }
+  .todo-actions .btn-edit:hover {
+    color: var(--primary);
+  }
+  .todo-actions .btn-delete:hover {
+    color: var(--danger);
+  }
+
+  /* Clear completed */
+  .footer {
+    text-align: center;
+  }
+  .footer button {
+    border: none;
+    background: transparent;
+    color: var(--danger);
+    font-size: 0.85rem;
+    cursor: pointer;
+    padding: 8px 16px;
+    border-radius: 6px;
+    transition: background var(--transition);
+  }
+  .footer button:hover {
+    background: #fef2f2;
+  }
+  .footer button:disabled {
+    color: #d1d5db;
+    cursor: default;
+    background: transparent;
+  }
+
+  .empty {
+    text-align: center;
+    color: #9ca3af;
+    padding: 40px 0;
+    font-size: 0.95rem;
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <div class="header">
+    <h1>📝 待办事项</h1>
+    <p>让每一天都井井有条</p>
+  </div>
+
+  <div class="input-group">
+    <input id="todoInput" type="text" placeholder="添加新任务..." maxlength="200" autofocus>
+    <button id="addBtn">添加</button>
+  </div>
+
+  <div class="toolbar">
+    <div class="stats">还剩 <span id="remaining">0</span> 项未完成</div>
+    <div class="filters">
+      <button class="active" data-filter="all">全部</button>
+      <button data-filter="active">未完成</button>
+      <button data-filter="completed">已完成</button>
+    </div>
+  </div>
+
+  <ul class="todo-list" id="todoList"></ul>
+
+  <div class="footer">
+    <button id="clearCompleted" disabled>清除已完成</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  const STORAGE_KEY = "todo_app_data";
+
+  const $input     = document.getElementById("todoInput");
+  const $addBtn    = document.getElementById("addBtn");
+  const $list      = document.getElementById("todoList");
+  const $remaining = document.getElementById("remaining");
+  const $clearBtn  = document.getElementById("clearCompleted");
+  const $filters   = document.querySelectorAll(".filters button");
+
+  let todos  = [];
+  let filter = "all";
+
+  /* ---- Storage ---- */
+  function save() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(todos));
+  }
+  function load() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) todos = JSON.parse(raw);
+    } catch (_) { todos = []; }
+  }
+
+  /* ---- Render ---- */
+  function render() {
+    const filtered = todos.filter(function (t) {
+      if (filter === "active")    return !t.done;
+      if (filter === "completed") return t.done;
+      return true;
+    });
+
+    var html = "";
+    for (var i = 0; i < filtered.length; i++) {
+      var t = filtered[i];
+      var doneClass = t.done ? "completed" : "";
+      var checkDone = t.done ? "done" : "";
+
+      html += '<li class="todo-item ' + doneClass + '" data-id="' + t.id + '">'
+            +   '<div class="todo-check ' + checkDone + '" data-action="toggle"></div>'
+            +   '<span class="todo-text">' + escapeHtml(t.text) + '</span>'
+            +   '<input class="todo-edit-input" style="display:none" value="' + escapeAttr(t.text) + '">'
+            +   '<div class="todo-actions">'
+            +     '<button class="btn-edit" data-action="edit">✎</button>'
+            +     '<button class="btn-delete" data-action="delete">✕</button>'
+            +   '</div>'
+            + '</li>';
+    }
+
+    if (!filtered.length) {
+      var msg = filter === "all" ? "还没有任务，快添加一个吧 🎯"
+              : filter === "active" ? "所有任务都完成啦 🎉"
+              : "还没有已完成的任务";
+      html = '<div class="empty">' + msg + '</div>';
+    }
+
+    $list.innerHTML = html;
+
+    // Stats
+    var remaining = todos.filter(function (t) { return !t.done; }).length;
+    $remaining.textContent = remaining;
+    $clearBtn.disabled = (todos.filter(function (t) { return t.done; }).length === 0);
+  }
+
+  function escapeHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  }
+  function escapeAttr(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+  }
+
+  /* ---- Actions ---- */
+  function add(text) {
+    text = text.trim();
+    if (!text) return;
+    todos.unshift({
+      id: Date.now(),
+      text: text,
+      done: false
+    });
+    save();
+    render();
+    $input.value = "";
+    $input.focus();
+  }
+
+  function toggle(id) {
+    for (var i = 0; i < todos.length; i++) {
+      if (todos[i].id === id) {
+        todos[i].done = !todos[i].done;
+        break;
+      }
+    }
+    save();
+    render();
+  }
+
+  function remove(id) {
+    todos = todos.filter(function (t) { return t.id !== id; });
+    save();
+    render();
+  }
+
+  function edit(id, newText) {
+    newText = newText.trim();
+    if (!newText) return;
+    for (var i = 0; i < todos.length; i++) {
+      if (todos[i].id === id) {
+        todos[i].text = newText;
+        break;
+      }
+    }
+    save();
+    render();
+  }
+
+  function clearCompleted() {
+    todos = todos.filter(function (t) { return !t.done; });
+    save();
+    render();
+  }
+
+  function setFilter(f) {
+    filter = f;
+    $filters.forEach(function (btn) {
+      btn.classList.toggle("active", btn.dataset.filter === f);
+    });
+    render();
+  }
+
+  /* ---- Event Delegation ---- */
+  $addBtn.addEventListener("click", function () {
+    add($input.value);
+  });
+  $input.addEventListener("keydown", function (e) {
+    if (e.key === "Enter") add($input.value);
+  });
+
+  $list.addEventListener("click", function (e) {
+    var target = e.target;
+    var action = target.dataset.action;
+    var li     = target.closest(".todo-item");
+    if (!li) return;
+    var id = Number(li.dataset.id);
+
+    if (action === "toggle") {
+      toggle(id);
+    } else if (action === "delete") {
+      remove(id);
+    } else if (action === "edit") {
+      // Enter edit mode
+      var textSpan  = li.querySelector(".todo-text");
+      var editInput = li.querySelector(".todo-edit-input");
+      var editBtn   = li.querySelector(".btn-edit");
+      // Hide text & actions, show input
+      textSpan.style.display = "none";
+      editInput.style.display = "";
+      editInput.value = textSpan.textContent; // raw text
+      editInput.focus();
+      editInput.select();
+      li.querySelector(".todo-actions").style.display = "none";
+
+      function finishEdit(save) {
+        if (save) edit(id, editInput.value);
+        else render(); // cancel → re-render
+      }
+
+      editInput.addEventListener("blur", function handler() {
+        editInput.removeEventListener("blur", handler);
+        editInput.removeEventListener("keydown", keyHandler);
+        finishEdit(true);
+      });
+
+      function keyHandler(e) {
+        if (e.key === "Enter") {
+          editInput.removeEventListener("blur", handler);
+          editInput.removeEventListener("keydown", keyHandler);
+          finishEdit(true);
+        } else if (e.key === "Escape") {
+          editInput.removeEventListener("blur", handler);
+          editInput.removeEventListener("keydown", keyHandler);
+          finishEdit(false);
+        }
+      }
+      editInput.addEventListener("keydown", keyHandler);
+    }
+  });
+
+  $clearBtn.addEventListener("click", clearCompleted);
+
+  $filters.forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      setFilter(btn.dataset.filter);
+    });
+  });
+
+  /* ---- Init ---- */
+  load();
+  render();
+})();
+</script>
+</body>
+</html>
