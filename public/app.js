@@ -1,5 +1,5 @@
 // ========== Socket.io 连接 ==========
-const socket = io();
+const socket = io('https://survive-b44w.onrender.com');
 
 // ========== 卡牌元数据 ==========
 const CARD_META = {
