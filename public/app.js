@@ -567,7 +567,7 @@ function startAiMode(nickname) {
       eliminated: false,
     };
   });
-
+  startGameLoop();  // 或者 game.startRound();
   // 切换页面
   showPage('game');
   renderOpponents();
