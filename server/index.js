@@ -7,8 +7,12 @@ const gameLogic = require('./gameLogic');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
-
+const io = new Server(server, {
+  cors: {
+    origin: "https://survive-qnk3.vercel.app", // 允许你的前端域名
+    methods: ["GET", "POST"]
+  }
+});
 // 提供静态文件
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
