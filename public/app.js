@@ -33,6 +33,7 @@ const pages = {
   join: document.getElementById('page-join'),
   lobby: document.getElementById('page-lobby'),
   game: document.getElementById('page-game'),
+  ai: document.getElementById('page-ai'),
   gameOver: document.getElementById('page-game-over'),
 };
 
