@@ -485,3 +485,409 @@ document.getElementById('input-nickname-join').addEventListener('keydown', (e) =
 document.getElementById('input-room-code').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') document.getElementById('btn-join-confirm').click();
 });
+
+// ================================================================
+// 人机模式 · 本地游戏逻辑
+// （不修改任何已有代码，完全隔离于联机模式）
+// ================================================================
+
+// 人机模式本地状态
+const aiGameState = {
+  initialized: false,
+  game: null,         // GameEngine 的游戏状态
+  myPlayerId: null,   // 真人玩家的 ID
+  round: 0,
+  hasPlayed: false,
+  selectedCardId: null,
+  timerInterval: null,
+};
+
+// ========== 人机模式页面导航 ==========
+document.getElementById('btn-ai-mode').addEventListener('click', function () {
+  // 如果已在其他 Socket 房间，先断开
+  if (socket.connected) {
+    socket.disconnect();
+  }
+  document.getElementById('input-nickname-ai').value = '';
+  showPage('ai');
+});
+
+document.getElementById('btn-back-ai').addEventListener('click', function () {
+  showPage('home');
+});
+
+// 人机模式回车
+document.getElementById('input-nickname-ai').addEventListener('keydown', function (e) {
+  if (e.key === 'Enter') document.getElementById('btn-ai-confirm').click();
+});
+
+// ========== 开始人机对战 ==========
+document.getElementById('btn-ai-confirm').addEventListener('click', function () {
+  const nickname = document.getElementById('input-nickname-ai').value.trim();
+  if (!nickname) {
+    showToast('请输入昵称');
+    return;
+  }
+  startAiMode(nickname);
+});
+
+// ========== 人机模式主入口 ==========
+function startAiMode(nickname) {
+  // 重置 GameEngine 的卡牌 ID 计数器
+  GameEngine.resetCardIdCounter();
+
+  // 构建三个玩家
+  const humanId = 'human-player';
+  const aiPlayers = AiPlayer.createAiPlayers(2, humanId);
+  const allPlayers = [
+    { id: humanId, nickname: nickname },
+    { id: aiPlayers[0].id, nickname: aiPlayers[0].nickname },
+    { id: aiPlayers[1].id, nickname: aiPlayers[1].nickname },
+  ];
+
+  // 初始化游戏状态
+  const game = GameEngine.createGameState(allPlayers);
+  aiGameState.game = game;
+  aiGameState.myPlayerId = humanId;
+  aiGameState.initialized = true;
+  aiGameState.round = 0;
+  aiGameState.selectedCardId = null;
+  aiGameState.hasPlayed = false;
+
+  // 设置全局 player ID，让 renderOpponents 能正确显示"你"
+  myPlayerId = humanId;
+
+  // 更新全局 gameState.players 以便渲染函数使用
+  gameState.players = game.players.map(function (p) {
+    return {
+      id: p.id,
+      nickname: p.nickname,
+      handSize: p.cards.filter(function (c) { return c.hp > 0; }).length,
+      eliminated: false,
+    };
+  });
+
+  // 切换页面
+  showPage('game');
+  renderOpponents();
+
+  // 启动第一回合
+  startAiRound();
+}
+
+// ========== 人机模式回合循环 ==========
+function startAiRound() {
+  const game = aiGameState.game;
+  if (!game) return;
+
+  // 检查是否所有玩家已淘汰
+  const alivePlayers = game.players.filter(function (p) { return !p.eliminated; });
+  if (alivePlayers.length <= 1) {
+    endAiGame(alivePlayers.length === 1 ? alivePlayers[0].id : null);
+    return;
+  }
+
+  // 增加回合数
+  game.round++;
+  game.phase = 'select-card';
+  game.playedCards = {};
+  game.playersPlayed = [];
+  aiGameState.round = game.round;
+  aiGameState.hasPlayed = false;
+  aiGameState.selectedCardId = null;
+
+  // 同步到全局 gameState（selectCard 和 updatePlayButton 依赖它）
+  gameState.hasPlayed = false;
+  gameState.selectedCardId = null;
+
+  // 更新 UI - 回合信息
+  document.getElementById('round-number').textContent = game.round;
+
+  // 隐藏战斗结果，显示等待遮罩
+  document.getElementById('battle-result').style.display = 'none';
+  document.getElementById('waiting-overlay').classList.add('hidden');
+
+  // 更新对手信息
+  updateAiOpponents();
+
+  // 给真人玩家发手牌
+  const humanPlayer = game.players.find(function (p) { return p.id === aiGameState.myPlayerId; });
+  if (humanPlayer && !humanPlayer.eliminated) {
+    const aliveCards = humanPlayer.cards.filter(function (c) { return c.hp > 0; });
+    gameState.myHand = aliveCards.map(function (c) {
+      return { id: c.id, type: c.type, hp: c.hp, maxHp: c.maxHp };
+    });
+    gameState.selectedCardId = null;
+    gameState.hasPlayed = false;
+    renderHand();
+    updatePlayButton();
+    startAiTimer();
+  } else {
+    // 真人玩家已被淘汰
+    gameState.myHand = [];
+    renderHand();
+    updatePlayButton();
+    // AI 继续自动进行
+    autoResolveAiRound();
+  }
+}
+
+// ========== AI 自动出牌（人类已被淘汰时） ==========
+function autoResolveAiRound() {
+  const game = aiGameState.game;
+  // 让所有未出牌的 AI 出牌
+  for (var i = 0; i < game.players.length; i++) {
+    var p = game.players[i];
+    if (p.eliminated) continue;
+    if (game.playersPlayed.indexOf(p.id) !== -1) continue;
+
+    var chosen = null;
+    if (p.id === aiGameState.myPlayerId) {
+      // 真人玩家：自动选第一张
+      var alive = p.cards.filter(function (c) { return c.hp > 0; });
+      if (alive.length > 0) chosen = alive[0];
+    } else {
+      chosen = selectAiCard(p.id, game);
+    }
+
+    if (chosen) {
+      game.playedCards[p.id] = chosen.id;
+      game.playersPlayed.push(p.id);
+    }
+  }
+
+  // 检查是否所有人都已出牌
+  if (game.playersPlayed.length >= game.players.filter(function (p) { return !p.eliminated; }).length) {
+    resolveAiBattle();
+  }
+}
+
+// ========== 真人玩家出牌（人机模式） ==========
+function selectAiCard(playerId, game) {
+  var player = game.players.find(function (p) { return p.id === playerId; });
+  if (!player || player.eliminated) return null;
+  return AiPlayer.decideCard(player, game);
+}
+
+// ========== 真人玩家出牌 ==========
+// 覆盖原有的出牌按钮监听（通过事件委托区分模式）
+document.getElementById('btn-play-card').addEventListener('click', function aiPlayHandler() {
+  if (!aiGameState.initialized) return; // 联机模式不走这里
+  if (aiGameState.hasPlayed) return;
+  // 读取 gameState.selectedCardId（由 selectCard / 现有渲染函数维护）
+  if (!gameState.selectedCardId) return;
+
+  var game = aiGameState.game;
+  var cardId = gameState.selectedCardId;
+  var humanId = aiGameState.myPlayerId;
+
+  // 记录出牌
+  game.playedCards[humanId] = cardId;
+  game.playersPlayed.push(humanId);
+  aiGameState.hasPlayed = true;
+  gameState.hasPlayed = true; // 同步到全局，updatePlayButton 依赖它
+
+  // 标记已出牌
+  var oppEl = document.querySelector('[data-player-id="' + humanId + '"]');
+  if (oppEl) oppEl.classList.add('has-played');
+
+  // 更新UI
+  updatePlayButton();
+
+  // 显示等待遮罩
+  document.getElementById('waiting-overlay').classList.remove('hidden');
+  document.getElementById('waiting-count').textContent = '已出牌: 1/3';
+
+  // AI 玩家依次出牌（带延迟，模拟思考）
+  var remaining = game.players.filter(function (p) { return !p.eliminated && p.id !== humanId; });
+  var delay = 0;
+
+  for (var i = 0; i < remaining.length; i++) {
+    var aiPlayer = remaining[i];
+    (function (aiP, d) {
+      setTimeout(function () {
+        if (game.playersPlayed.indexOf(aiP.id) !== -1) return;
+
+        var chosen = selectAiCard(aiP.id, game);
+        if (chosen) {
+          game.playedCards[aiP.id] = chosen.id;
+          game.playersPlayed.push(aiP.id);
+
+          // 标记 AI 已出牌
+          var aiEl = document.querySelector('[data-player-id="' + aiP.id + '"]');
+          if (aiEl) aiEl.classList.add('has-played');
+
+          // 更新等待计数
+          var total = game.players.filter(function (p) { return !p.eliminated; }).length;
+          document.getElementById('waiting-count').textContent = '已出牌: ' + game.playersPlayed.length + '/' + total;
+
+          // 检查是否所有人都已出牌
+          var aliveCount = game.players.filter(function (p) { return !p.eliminated; }).length;
+          if (game.playersPlayed.length >= aliveCount) {
+            stopAiTimer();
+            document.getElementById('waiting-overlay').classList.add('hidden');
+            resolveAiBattle();
+          }
+        }
+      }, d);
+    })(aiPlayer, delay);
+
+    delay += 600 + Math.random() * 600; // 0.6~1.2s 延迟
+  }
+});
+
+// ========== 战斗结算（人机模式） ==========
+function resolveAiBattle() {
+  var game = aiGameState.game;
+  if (!game) return;
+
+  game.phase = 'reveal';
+
+  // 执行战斗结算
+  var result = GameEngine.resolveRound(game);
+
+  // 更新对手信息
+  updateAiOpponents();
+
+  // 渲染战斗结果
+  renderBattleResult(result);
+
+  // 更新手牌（从存活牌中更新）
+  var humanId = aiGameState.myPlayerId;
+  var humanPlayer = game.players.find(function (p) { return p.id === humanId; });
+  if (humanPlayer && !humanPlayer.eliminated) {
+    var aliveCards = humanPlayer.cards.filter(function (c) { return c.hp > 0; });
+    gameState.myHand = aliveCards.map(function (c) {
+      return { id: c.id, type: c.type, hp: c.hp, maxHp: c.maxHp };
+    });
+  } else {
+    gameState.myHand = [];
+  }
+
+  // 检查游戏结束
+  if (result.gameOver) {
+    var winnerPlayer = result.winnerId
+      ? game.players.find(function (p) { return p.id === result.winnerId; })
+      : null;
+    endAiGame(result.winnerId);
+    return;
+  }
+
+  // 2 秒后下一回合
+  setTimeout(function () {
+    startAiRound();
+  }, 2000);
+}
+
+// ========== 游戏结束（人机模式） ==========
+function endAiGame(winnerId) {
+  stopAiTimer();
+  document.getElementById('waiting-overlay').classList.add('hidden');
+
+  var game = aiGameState.game;
+  var humanId = aiGameState.myPlayerId;
+  var winnerPlayer = winnerId ? game.players.find(function (p) { return p.id === winnerId; }) : null;
+
+  if (winnerPlayer) {
+    document.getElementById('winner-announcement').textContent =
+      winnerId === humanId
+        ? '🏆 你赢了！'
+        : '🏆 ' + winnerPlayer.nickname + ' 获胜！';
+  } else {
+    document.getElementById('winner-announcement').textContent = '🤝 平局！';
+  }
+
+  // 构建排行榜
+  var standingsData = {
+    winnerId: winnerId,
+    standings: game.players.map(function (p) {
+      return {
+        id: p.id,
+        nickname: p.nickname,
+        eliminated: p.eliminated,
+        handSize: p.cards.filter(function (c) { return c.hp > 0; }).length,
+      };
+    }),
+  };
+
+  renderStandings(standingsData);
+  showPage('gameOver');
+
+  // 清理状态
+  aiGameState.initialized = false;
+  aiGameState.game = null;
+  myPlayerId = null; // 重置 player ID，避免干扰联机模式
+}
+
+// ========== 人机模式辅助函数 ==========
+
+function updateAiOpponents() {
+  var game = aiGameState.game;
+  if (!game) return;
+
+  gameState.players = game.players.map(function (p) {
+    return {
+      id: p.id,
+      nickname: p.nickname,
+      handSize: p.cards.filter(function (c) { return c.hp > 0; }).length,
+      eliminated: p.eliminated,
+    };
+  });
+  renderOpponents();
+}
+
+function startAiTimer() {
+  var seconds = 30;
+  var el = document.getElementById('timer-display');
+  el.textContent = seconds;
+  el.classList.remove('urgent');
+
+  clearInterval(aiGameState.timerInterval);
+  aiGameState.timerInterval = setInterval(function () {
+    seconds--;
+    el.textContent = seconds;
+    if (seconds <= 5) el.classList.add('urgent');
+    if (seconds <= 0) {
+      clearInterval(aiGameState.timerInterval);
+      // 超时自动出牌（真人玩家）
+      if (aiGameState.initialized && !aiGameState.hasPlayed) {
+        handleAiTimeout();
+      }
+    }
+  }, 1000);
+}
+
+function stopAiTimer() {
+  clearInterval(aiGameState.timerInterval);
+}
+
+function handleAiTimeout() {
+  if (!aiGameState.initialized || aiGameState.hasPlayed) return;
+
+  var game = aiGameState.game;
+  var humanId = aiGameState.myPlayerId;
+
+  // 自动选牌（按等级最高选）
+  var humanPlayer = game.players.find(function (p) { return p.id === humanId; });
+  if (humanPlayer) {
+    var autoCard = GameEngine.autoPlayCard(game, humanId);
+    if (autoCard) {
+      gameState.selectedCardId = autoCard.id;
+      // 触发自动出牌（aiPlayHandler 会从 gameState.selectedCardId 读取）
+      document.getElementById('btn-play-card').click();
+    }
+  }
+}
+
+// 返回首页时清理人机模式
+document.getElementById('btn-back-to-home').addEventListener('click', function () {
+  if (aiGameState.initialized) {
+    aiGameState.initialized = false;
+    aiGameState.game = null;
+    stopAiTimer();
+    gameState.myHand = [];
+    gameState.selectedCardId = null;
+    gameState.players = [];
+  }
+  showPage('home');
+});

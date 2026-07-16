@@ -28,6 +28,7 @@
       <div class="home-buttons">
         <button id="btn-create" class="btn btn-primary">🏠 创建房间</button>
         <button id="btn-join" class="btn btn-secondary">🔗 加入房间</button>
+        <button id="btn-ai-mode" class="btn btn-ai">🤖 人机对战</button>
       </div>
       <p class="home-footer">三人实时对战 · 博物志风格卡牌</p>
     </div>
@@ -59,6 +60,35 @@
       <div class="form-actions">
         <button id="btn-join-confirm" class="btn btn-primary">确认加入</button>
         <button id="btn-back-home2" class="btn btn-text">返回</button>
+      </div>
+    </div>
+
+    <!-- ========== 人机模式页 ========== -->
+    <div id="page-ai" class="page">
+      <h2>🤖 人机对战</h2>
+      <p class="page-subtitle">与 AI 对手进行练习</p>
+      <div class="form-group">
+        <label for="input-nickname-ai">输入你的昵称</label>
+        <input type="text" id="input-nickname-ai" placeholder="请输入昵称" maxlength="8">
+      </div>
+      <div class="ai-info-box">
+        <div class="ai-info-item">
+          <span class="ai-info-icon">🧑</span>
+          <span>你</span>
+        </div>
+        <div class="ai-info-vs">VS</div>
+        <div class="ai-info-item">
+          <span class="ai-info-icon">🤖</span>
+          <span>阿尔法</span>
+        </div>
+        <div class="ai-info-item">
+          <span class="ai-info-icon">🤖</span>
+          <span>贝塔</span>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button id="btn-ai-confirm" class="btn btn-primary">开始对战</button>
+        <button id="btn-back-ai" class="btn btn-text">返回</button>
       </div>
     </div>
 
@@ -197,6 +227,8 @@
   </div>
 
   <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+  <script src="gameEngine.js"></script>
+  <script src="aiPlayer.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
