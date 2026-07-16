@@ -115,8 +115,11 @@
         <div class="header-left">
           <div class="round-info">第 <span id="round-number">1</span> 回合</div>
         </div>
-        <div class="timer" id="timer-display">30</div>
-        <button class="rules-btn" id="btn-rules" title="游戏规则">📜</button>
+        <div class="header-right">
+          <div class="timer" id="timer-display">30</div>
+          <button class="header-icon-btn" id="btn-log" title="记牌器">📋</button>
+          <button class="header-icon-btn" id="btn-rules" title="游戏规则">📜</button>
+        </div>
       </div>
 
       <div class="battlefield">
@@ -153,6 +156,28 @@
         <div class="waiting-spinner"></div>
         <p>等待其他玩家出牌...</p>
         <p class="waiting-count" id="waiting-count">已出牌: 0/3</p>
+      </div>
+    </div>
+
+    <!-- ========== 记牌器面板 ========== -->
+    <div class="log-panel hidden" id="log-panel">
+      <div class="log-header">
+        <h3>📋 战况记录</h3>
+        <button class="log-close" id="btn-log-close">✕</button>
+      </div>
+      <div class="log-tabs">
+        <button class="log-tab active" data-log-tab="events">战报</button>
+        <button class="log-tab" data-log-tab="cards">牌局</button>
+      </div>
+      <div class="log-body" id="log-body-events">
+        <div class="log-scroll" id="log-events">
+          <div class="log-empty">暂无记录</div>
+        </div>
+      </div>
+      <div class="log-body hidden" id="log-body-cards">
+        <div class="log-scroll" id="log-card-status">
+          <div class="log-empty">暂无记录</div>
+        </div>
       </div>
     </div>
 

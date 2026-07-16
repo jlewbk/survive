@@ -503,6 +503,129 @@ const aiGameState = {
   timerInterval: null,
 };
 
+// ========== 记牌器 ==========
+const gameLog = {
+  events: [],       // 所有回合的累积事件
+  roundHeaders: [], // 回合标记 [{round, index}]
+  open: false,
+};
+function initGameLog() {
+  gameLog.events = [];
+  gameLog.roundHeaders = [];
+  gameLog.open = false;
+}
+function addRoundToLog(round, events) {
+  gameLog.roundHeaders.push({ round: round, index: gameLog.events.length });
+  for (var ei = 0; ei < events.length; ei++) {
+    gameLog.events.push(events[ei]);
+  }
+  if (gameLog.open) renderGameLog();
+}
+function renderGameLog() {
+  // === 战报标签 ===
+  var eventsContainer = document.getElementById('log-events');
+  if (gameLog.events.length === 0) {
+    eventsContainer.innerHTML = '<div class="log-empty">暂无记录</div>';
+  } else {
+    var html = '';
+    var rhIdx = 0;
+    for (var ei = 0; ei < gameLog.events.length; ei++) {
+      // 插入回合分隔头
+      if (rhIdx < gameLog.roundHeaders.length && gameLog.roundHeaders[rhIdx].index === ei) {
+        var rh = gameLog.roundHeaders[rhIdx];
+        html += '<div class="log-entry round-header">⚔️ 第 ' + rh.round + ' 回合</div>';
+        rhIdx++;
+      }
+      var ev = gameLog.events[ei];
+      var icon = getEventIcon(ev);
+      var cls = 'log-entry';
+      if (ev.type === 'play') cls += ' play';
+      else if (ev.type === 'attack') cls += ' attack';
+      else if (ev.type === 'card_destroyed') cls += ' destroyed';
+      else if (ev.type === 'eliminated') cls += ' eliminated';
+      else if (['tiger_clear','hunter_mutual','teamup','suicide','chain_swapped','tiger_death'].indexOf(ev.type) !== -1) cls += ' special';
+      if (ev.type !== 'phase' && ev.type !== 'damage') {
+        html += '<div class="' + cls + '"><span class="evt-icon">' + icon + '</span>' + (ev.description || '') + '</div>';
+      }
+    }
+    eventsContainer.innerHTML = html;
+    eventsContainer.scrollTop = eventsContainer.scrollHeight;
+  }
+
+  // === 牌局标签 ===
+  renderCardStatus();
+}
+function getEventIcon(ev) {
+  switch (ev.type) {
+    case 'play': return '🃏';
+    case 'attack': return '⚔️';
+    case 'card_destroyed': return '💀';
+    case 'tiger_clear': return '🐯';
+    case 'hunter_mutual': return '🏹';
+    case 'teamup': return '⚡';
+    case 'suicide': return '💥';
+    case 'chain_swapped': return '🔄';
+    case 'tiger_death': return '💔';
+    case 'eliminated': return '❌';
+    case 'game_over': return '🏆';
+    default: return '';
+  }
+}
+function renderCardStatus() {
+  var container = document.getElementById('log-card-status');
+  var game = aiGameState && aiGameState.game;
+  if (!game) {
+    container.innerHTML = '<div class="log-empty">暂无数据</div>';
+    return;
+  }
+  var cardMeta = { tiger:'虎', hunter:'猎人', wolf:'狼', sheep:'羊', dog:'犬', cat:'猫', chicken:'鸡' };
+  var cardEmoji = { tiger:'🐯', hunter:'🏹', wolf:'🐺', sheep:'🐑', dog:'🐕', cat:'🐱', chicken:'🐔' };
+  var allTypes = ['tiger','hunter','wolf','sheep','dog','cat','chicken'];
+  var html = '';
+  for (var pi = 0; pi < game.players.length; pi++) {
+    var p = game.players[pi];
+    var isMe = p.id === aiGameState.myPlayerId;
+    var nameLabel = isMe ? '你 (' + p.nickname + ')' : p.nickname;
+    var elimTag = p.eliminated ? ' <span class="pcs-elim">❌ 已淘汰</span>' : '';
+
+    html += '<div class="player-card-status">';
+    html += '  <div class="pcs-name">' + nameLabel + elimTag + '</div>';
+    html += '  <div class="pcs-row">';
+
+    for (var ti = 0; ti < allTypes.length; ti++) {
+      var type = allTypes[ti];
+      // 统计该类型卡牌的初始数量和当前存活
+      var totalCount = 0;
+      var aliveCount = 0;
+      for (var ci = 0; ci < p.cards.length; ci++) {
+        if (p.cards[ci].type === type) {
+          totalCount++;
+          if (p.cards[ci].hp > 0) aliveCount++;
+        }
+      }
+      if (totalCount === 0) continue;
+
+      var lostCount = totalCount - aliveCount;
+      // 找一个存活卡牌显示血量
+      var hpDisplay = '';
+      for (var ci2 = 0; ci2 < p.cards.length; ci2++) {
+        if (p.cards[ci2].type === type && p.cards[ci2].hp > 0) {
+          hpDisplay = '<span class="pcs-hp">❤️' + p.cards[ci2].hp + '</span>';
+          break;
+        }
+      }
+      var lostClass = lostCount >= totalCount ? ' lost' : '';
+      html += '<span class="pcs-card' + lostClass + '">'
+        + cardEmoji[type] + cardMeta[type]
+        + (aliveCount > 0 ? '×' + aliveCount : '×0')
+        + hpDisplay
+        + '</span>';
+    }
+    html += '  </div></div>';
+  }
+  container.innerHTML = html;
+}
+
 // ========== 人机模式页面导航 ==========
 document.getElementById('btn-ai-mode').addEventListener('click', function () {
   // 如果已在其他 Socket 房间，先断开
@@ -554,6 +677,9 @@ function startAiMode(nickname) {
   aiGameState.round = 0;
   aiGameState.selectedCardId = null;
   aiGameState.hasPlayed = false;
+
+  // 初始化记牌器
+  initGameLog();
 
   // 设置全局 player ID，让 renderOpponents 能正确显示"你"
   myPlayerId = humanId;
@@ -753,6 +879,9 @@ function resolveAiBattle() {
   // 执行战斗结算
   var result = GameEngine.resolveRound(game);
 
+  // 记录到记牌器
+  addRoundToLog(game.round, result.events);
+
   // 更新对手信息
   updateAiOpponents();
 
@@ -896,5 +1025,37 @@ document.getElementById('btn-back-to-home').addEventListener('click', function (
     gameState.selectedCardId = null;
     gameState.players = [];
   }
+  // 关闭记牌器
+  gameLog.open = false;
+  document.getElementById('log-panel').classList.add('hidden');
   showPage('home');
+});
+
+// ========== 记牌器交互 ==========
+document.getElementById('btn-log').addEventListener('click', function () {
+  if (!aiGameState.initialized) return;
+  gameLog.open = !gameLog.open;
+  var panel = document.getElementById('log-panel');
+  if (gameLog.open) {
+    panel.classList.remove('hidden');
+    renderGameLog();
+  } else {
+    panel.classList.add('hidden');
+  }
+});
+document.getElementById('btn-log-close').addEventListener('click', function () {
+  gameLog.open = false;
+  document.getElementById('log-panel').classList.add('hidden');
+});
+
+// 标签切换
+document.querySelectorAll('.log-tab').forEach(function (tab) {
+  tab.addEventListener('click', function () {
+    document.querySelectorAll('.log-tab').forEach(function (t) { t.classList.remove('active'); });
+    tab.classList.add('active');
+    var target = tab.dataset.logTab;
+    document.getElementById('log-body-events').classList.toggle('hidden', target !== 'events');
+    document.getElementById('log-body-cards').classList.toggle('hidden', target !== 'cards');
+    if (target === 'cards') renderCardStatus();
+  });
 });
