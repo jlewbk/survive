@@ -95,12 +95,11 @@
       }
     }
 
-    // ---- Step 1: 出牌消耗 (Play Cost) ----
     events.push({ type: 'phase', description: '=== 第 ' + state.round + ' 回合 战斗开始 ===' });
 
+    // 先记录出牌事件（暂时不扣血）
     for (let ei = 0; ei < playedEntries.length; ei++) {
       const entry = playedEntries[ei];
-      entry.card.hp -= PLAY_COST;
       events.push({
         type: 'play',
         playerId: entry.playerId,
@@ -109,29 +108,22 @@
         cardEmoji: CARD_META[entry.card.type].emoji,
         description: entry.nickname + ' 打出了 ' + CARD_META[entry.card.type].emoji + CARD_META[entry.card.type].name,
       });
-      if (entry.card.hp <= 0) {
-        events.push({
-          type: 'card_destroyed',
-          playerId: entry.playerId,
-          nickname: entry.nickname,
-          cardType: entry.card.type,
-          description: entry.nickname + ' 的 ' + CARD_META[entry.card.type].name + ' 因消耗过度而死亡',
-        });
-      }
     }
 
-    // 移除已死亡的牌
-    let alive = playedEntries.filter(function (e) { return e.card.hp > 0; });
+    // ---- 统计出牌类型 ----
+    const tigerCount = playedEntries.filter(function (e) { return e.card.type === 'tiger'; }).length;
+    const hunterCount = playedEntries.filter(function (e) { return e.card.type === 'hunter'; }).length;
 
-    // ---- Step 2: 虎的专属 (Tiger Special) ----
-    const tigerAlive = alive.filter(function (e) { return e.card.type === 'tiger'; });
-    if (tigerAlive.length >= 2) {
+    // ---- 特殊规则优先判定 ----
+
+    // 1. 双虎清场
+    if (tigerCount >= 2) {
       events.push({
         type: 'tiger_clear',
         description: '🐯 双虎齐聚，威震全场！所有卡牌被清除！',
       });
-      for (let ai = 0; ai < alive.length; ai++) {
-        const entry = alive[ai];
+      for (let ai = 0; ai < playedEntries.length; ai++) {
+        const entry = playedEntries[ai];
         entry.card.hp = 0;
         if (entry.card.type !== 'tiger') {
           events.push({
@@ -146,18 +138,15 @@
       return buildRoundResult(state, events, playedEntries);
     }
 
-    // ---- Step 3: 猎人互斥 (Hunter Mutual Exclusion) ----
-    const hunterAlive = alive.filter(function (e) { return e.card.type === 'hunter'; });
-    const hasTiger = tigerAlive.length > 0;
-
-    if (hunterAlive.length >= 2 && !hasTiger) {
+    // 2. 猎人互斥（无虎在场时，三张牌各扣1血，取代出牌消耗）
+    if (hunterCount >= 2 && tigerCount === 0) {
       events.push({
         type: 'hunter_mutual',
         description: '🏹 猎人互斥！所有卡牌失去1血！',
       });
-      for (let ai = 0; ai < alive.length; ai++) {
-        const entry = alive[ai];
-        entry.card.hp -= 1;
+      for (let ai = 0; ai < playedEntries.length; ai++) {
+        const entry = playedEntries[ai];
+        entry.card.hp -= 1;  // 只扣1血（互斥即消耗，不叠加出牌消耗）
         events.push({
           type: 'damage',
           playerId: entry.playerId,
@@ -177,10 +166,30 @@
           });
         }
       }
-      alive = alive.filter(function (e) { return e.card.hp > 0; });
+      // 互斥后跳过正常捕食阶段
+      return buildRoundResult(state, events, playedEntries);
     }
 
-    // ---- Step 4: 狼灭绝检测 ----
+    // ---- 正常流程：出牌消耗 + 捕食 ----
+    // 出牌消耗
+    for (let ei = 0; ei < playedEntries.length; ei++) {
+      const entry = playedEntries[ei];
+      entry.card.hp -= PLAY_COST;
+      if (entry.card.hp <= 0) {
+        events.push({
+          type: 'card_destroyed',
+          playerId: entry.playerId,
+          nickname: entry.nickname,
+          cardType: entry.card.type,
+          description: entry.nickname + ' 的 ' + CARD_META[entry.card.type].name + ' 因消耗过度而死亡',
+        });
+      }
+    }
+
+    // 移除已死亡的牌
+    let alive = playedEntries.filter(function (e) { return e.card.hp > 0; });
+
+    // ---- 狼灭绝检测 ----
     if (state.totalWolfDeaths >= 3 && !state.chainSwapped) {
       state.chainSwapped = true;
       events.push({
@@ -189,7 +198,7 @@
       });
     }
 
-    // ---- Step 5: 正常捕食 + 二打一 ----
+    // ---- 正常捕食 + 二打一 ----
     if (alive.length >= 2) {
       const currentChain = getChain(state.chainSwapped);
 
