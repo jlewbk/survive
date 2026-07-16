@@ -567,7 +567,6 @@ function startAiMode(nickname) {
       eliminated: false,
     };
   });
-  startGameLoop();  // 或者 game.startRound();
   // 切换页面
   showPage('game');
   renderOpponents();
@@ -663,11 +662,14 @@ function autoResolveAiRound() {
   }
 }
 
-// ========== 真人玩家出牌（人机模式） ==========
+// ========== AI 选牌（返回卡牌对象） ==========
 function selectAiCard(playerId, game) {
   var player = game.players.find(function (p) { return p.id === playerId; });
   if (!player || player.eliminated) return null;
-  return AiPlayer.decideCard(player, game);
+  var cardId = AiPlayer.decideCard(player, game);
+  if (!cardId) return null;
+  // decideCard 返回的是卡牌 ID 字符串，需要找到卡牌对象
+  return player.cards.find(function (c) { return c.id === cardId && c.hp > 0; });
 }
 
 // ========== 真人玩家出牌 ==========
@@ -675,7 +677,6 @@ function selectAiCard(playerId, game) {
 document.getElementById('btn-play-card').addEventListener('click', function aiPlayHandler() {
   if (!aiGameState.initialized) return; // 联机模式不走这里
   if (aiGameState.hasPlayed) return;
-  // 读取 gameState.selectedCardId（由 selectCard / 现有渲染函数维护）
   if (!gameState.selectedCardId) return;
 
   var game = aiGameState.game;
@@ -686,7 +687,7 @@ document.getElementById('btn-play-card').addEventListener('click', function aiPl
   game.playedCards[humanId] = cardId;
   game.playersPlayed.push(humanId);
   aiGameState.hasPlayed = true;
-  gameState.hasPlayed = true; // 同步到全局，updatePlayButton 依赖它
+  gameState.hasPlayed = true;
 
   // 标记已出牌
   var oppEl = document.querySelector('[data-player-id="' + humanId + '"]');
@@ -700,7 +701,13 @@ document.getElementById('btn-play-card').addEventListener('click', function aiPl
   document.getElementById('waiting-count').textContent = '已出牌: 1/3';
 
   // AI 玩家依次出牌（带延迟，模拟思考）
-  var remaining = game.players.filter(function (p) { return !p.eliminated && p.id !== humanId; });
+  var remaining = [];
+  for (var ri = 0; ri < game.players.length; ri++) {
+    var p = game.players[ri];
+    if (p.id !== humanId && !p.eliminated) {
+      remaining.push(p);
+    }
+  }
   var delay = 0;
 
   for (var i = 0; i < remaining.length; i++) {
@@ -714,17 +721,16 @@ document.getElementById('btn-play-card').addEventListener('click', function aiPl
           game.playedCards[aiP.id] = chosen.id;
           game.playersPlayed.push(aiP.id);
 
-          // 标记 AI 已出牌
           var aiEl = document.querySelector('[data-player-id="' + aiP.id + '"]');
           if (aiEl) aiEl.classList.add('has-played');
 
-          // 更新等待计数
-          var total = game.players.filter(function (p) { return !p.eliminated; }).length;
-          document.getElementById('waiting-count').textContent = '已出牌: ' + game.playersPlayed.length + '/' + total;
+          var totalAlive = 0;
+          for (var pj = 0; pj < game.players.length; pj++) {
+            if (!game.players[pj].eliminated) totalAlive++;
+          }
+          document.getElementById('waiting-count').textContent = '已出牌: ' + game.playersPlayed.length + '/' + totalAlive;
 
-          // 检查是否所有人都已出牌
-          var aliveCount = game.players.filter(function (p) { return !p.eliminated; }).length;
-          if (game.playersPlayed.length >= aliveCount) {
+          if (game.playersPlayed.length >= totalAlive) {
             stopAiTimer();
             document.getElementById('waiting-overlay').classList.add('hidden');
             resolveAiBattle();
@@ -733,7 +739,7 @@ document.getElementById('btn-play-card').addEventListener('click', function aiPl
       }, d);
     })(aiPlayer, delay);
 
-    delay += 600 + Math.random() * 600; // 0.6~1.2s 延迟
+    delay += 600 + Math.random() * 600;
   }
 });
 
